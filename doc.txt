@@ -1,0 +1,211 @@
+Kubernetes Security Considerations for Development Teams
+
+(Applies to workloads deployed on Gardener, AWS EKS, GCP GKE, Azure AKS, etc.)
+
+1. Container Image Security
+
+Use Trusted Base Images
+
+Always start from verified, minimal, and updated base images (e.g., alpine, distroless, ubuntu:22.04).
+
+Avoid public or unverified Docker Hub images.
+
+Pin Image Versions or Digests
+
+Never use :latest.
+
+Use immutable references like nginx@sha256:<digest>.
+
+Regular Vulnerability Scanning
+
+Integrate Trivy, Aqua, or Grype into CI/CD.
+
+Fail builds if high/critical CVEs are found.
+
+No Secrets in Images
+
+Don’t embed secrets, tokens, or configs in Dockerfile or image layers.
+
+Use environment variables or Kubernetes Secrets instead.
+
+2. Pod and Deployment Configuration
+
+Run as Non-Root User
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+
+Drop Linux Capabilities
+
+securityContext:
+  capabilities:
+    drop: ["ALL"]
+
+
+Disallow Privilege Escalation
+
+securityContext:
+  allowPrivilegeEscalation: false
+
+
+Read-Only Filesystem
+
+Make the root filesystem read-only wherever possible.
+
+securityContext:
+  readOnlyRootFilesystem: true
+
+
+Set Resource Limits
+
+Always define CPU and memory requests and limits to prevent resource abuse.
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+3. Secrets and Configuration Management
+
+Never Hardcode Secrets
+
+Store secrets in:
+
+Cloud Secret Manager (AWS/GCP/Azure)
+
+HashiCorp Vault
+
+External Secrets Operator
+
+Avoid Environment Variables for Sensitive Data
+
+Mount secrets as files when possible, not env vars.
+
+Encrypt Sensitive Config Files
+
+Use SOPS, SealedSecrets, or age for encrypted configuration in Git.
+
+4. Network and Communication
+
+Limit Pod Communication
+
+Declare NetworkPolicies to restrict traffic between pods.
+
+Example: only allow traffic from backend to database namespace.
+
+Use mTLS or HTTPS for Internal APIs
+
+Never use plain HTTP for service-to-service communication.
+
+If using a service mesh (Istio, Linkerd), enforce mTLS by default.
+
+Don’t Hardcode IPs or Endpoints
+
+Use Kubernetes services or DNS names instead.
+
+5. Supply Chain and CI/CD Security
+
+Sign Container Images
+
+Use Cosign or Notary v2 for image signing.
+
+Verify signatures in admission controllers (Kyverno, Gatekeeper).
+
+Validate YAMLs Before Deployment
+
+Use kube-linter, datree, or conftest in CI pipeline.
+
+Reject manifests that violate org security rules.
+
+Restrict Deployment Permissions
+
+Developers should deploy only to non-prod namespaces.
+
+Use GitOps (ArgoCD, Flux) for controlled deployments.
+
+6. Dependency and Application Security
+
+Scan Dependencies
+
+Use tools like npm audit, pip-audit, snyk, or grype during build.
+
+Keep dependencies updated with Renovate or Dependabot.
+
+Validate Input and Sanitize Output
+
+Never trust incoming data — prevent injection vulnerabilities.
+
+Use HTTPS and Secure Headers
+
+Enforce TLS (no mixed content).
+
+Apply headers like X-Content-Type-Options, Strict-Transport-Security.
+
+7. Logging and Monitoring
+
+Use Structured Logging
+
+JSON logs preferred for ingestion by centralized log systems.
+
+Avoid logging sensitive data (tokens, passwords, PII).
+
+Expose Health and Metrics Endpoints Securely
+
+Protect /metrics and /healthz endpoints behind auth or network restrictions.
+
+Add Application-Level Alerts
+
+Integrate with tools like Prometheus, Loki, Grafana, or OpenTelemetry.
+
+8. Runtime and Operational Safety
+
+Avoid HostPath Mounts
+
+Don’t mount host directories unless absolutely necessary.
+
+volumes:
+  - name: temp
+    emptyDir: {}
+
+
+Avoid Privileged Containers
+
+securityContext:
+  privileged: false
+
+
+Limit Access to the API Server
+
+Don’t ship tokens that allow external pods to call Kubernetes API unless needed.
+
+Graceful Shutdown Handling
+
+Handle SIGTERM properly in app code to prevent data corruption.
+
+9. Observability and Incident Response
+
+Add Labels and Annotations
+
+Every deployment should have:
+
+metadata:
+  labels:
+    app: <app-name>
+    owner: <team-name>
+    env: <dev/stage/prod>
+
+
+Centralized Logging and Tracing
+
+Send logs to a secure, tamper-proof system.
+
+Use tracing IDs in logs for correlation.
+
+Crash Loop Alerts
+
+Ensure alerting is configured for repeated pod restarts.
